@@ -1,0 +1,17 @@
+# API
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+
+# Scraper
+selenium>=4.25.0
+
+# Desktop client
+PySide6>=6.8.0
+
+# Config
+python-dotenv>=1.0.0
+pydantic-settings>=2.6.0
