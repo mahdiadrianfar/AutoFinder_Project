@@ -12,7 +12,10 @@ from server.scraper.base import scrape_divar_list
 
 app = FastAPI(title="AutoIndex API", version="0.1.0")
 
-init_db()
+
+@app.on_event("startup")
+def startup_event():
+    init_db()
 
 
 def get_db():
@@ -39,7 +42,7 @@ class AdResponse(BaseModel):
     scraped_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 @app.get("/health")
@@ -98,8 +101,8 @@ def list_ads(
     min_price: Optional[int] = Query(None, description="Minimum price filter"),
     max_price: Optional[int] = Query(None, description="Maximum price filter"),
     sort_by: str = Query(
-        "scraped_at", regex="^(scraped_at|price_value|title)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+        "scraped_at", pattern="^(scraped_at|price_value|title)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
