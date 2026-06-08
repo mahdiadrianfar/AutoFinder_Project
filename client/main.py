@@ -94,11 +94,15 @@ class MainWindow(QMainWindow):
         self.result_list = QListWidget()
         self.result_list.itemClicked.connect(self.on_item_selected)
 
+        self.status_label = QLabel("آخرین به‌روزرسانی: بارگذاری اولیه")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+
         self.details_label = QLabel("نتایج جستجو در اینجا نمایش داده می‌شود.")
         self.details_label.setWordWrap(True)
         self.details_label.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         main_layout = QVBoxLayout()
+        main_layout.addWidget(self.status_label)
         main_layout.addLayout(search_layout)
         main_layout.addWidget(self.result_list)
         main_layout.addWidget(self.details_label)
@@ -111,6 +115,7 @@ class MainWindow(QMainWindow):
         self.current_results: list[dict] = []
         self.sort_ads()
         self.show_results(self.ads)
+        self.update_status_label()
 
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
@@ -123,6 +128,9 @@ class MainWindow(QMainWindow):
 
         with data_file.open("r", encoding="utf-8") as handle:
             ads = json.load(handle)
+
+        self.data_file_mtime = data_file.stat().st_mtime
+        self.data_file_path = str(data_file)
 
         normalized_ads = []
         for ad in ads:
