@@ -3,10 +3,12 @@
 import json
 import re
 import sys
+import threading
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -203,11 +205,37 @@ class MainWindow(QMainWindow):
             self.status_label.setText("آخرین به‌روزرسانی: نامشخص")
 
     def on_refresh(self) -> None:
+        # Run scraper script in background to avoid blocking UI
+        self.refresh_button.setEnabled(False)
+        self.status_label.setText("در حال بررسی سایت و دریافت آگهی‌ها...")
+
+        script_path = Path(__file__).resolve(
+        ).parent.parent / "scrape_divar_to_json.py"
+
+        def worker():
+            try:
+                subprocess.run([sys.executable, str(script_path)], check=False)
+            except Exception as e:
+                # store error for main thread to show
+                self._refresh_error = str(e)
+            # schedule UI update on main thread
+            QTimer.singleShot(0, self._on_refresh_done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_refresh_done(self) -> None:
+        self.refresh_button.setEnabled(True)
+        # reload and reapply sorting / filtering
         self.ads = self.load_ads()
         self.sort_ads()
         self.on_search()
         self.update_status_label()
-        self.details_label.setText("داده‌ها دوباره بارگذاری و فیلتر شدند.")
+        if getattr(self, "_refresh_error", None):
+            self.details_label.setText(
+                f"خطا در بروزرسانی: {self._refresh_error}")
+            del self._refresh_error
+        else:
+            self.details_label.setText("داده‌ها با موفقیت به‌روزرسانی شدند.")
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
@@ -232,13 +260,6 @@ class MainWindow(QMainWindow):
             details.append(f"محل: {location}")
         if badge:
             details.append(f"توضیح کوتاه: {badge}")
-
-        for key, value in selected.items():
-            if key in {"title", "normalized_price", "price", "kms", "location", "badge", "price_int"}:
-                continue
-            if not value:
-                continue
-            details.append(f"{key}: {value}")
 
         self.details_label.setText("\n".join(details))
 
