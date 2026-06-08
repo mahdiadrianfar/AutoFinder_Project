@@ -192,10 +192,12 @@ class MainWindow(QMainWindow):
 
     def update_status_label(self) -> None:
         file_time = getattr(self, "data_file_mtime", None)
-        if file_time:
-            time_text = Path(self.data_file_path).stat().st_mtime
+        file_path = getattr(self, "data_file_path", None)
+        if file_time and file_path:
+            timestamp = datetime.fromtimestamp(
+                file_time).strftime("%Y-%m-%d %H:%M:%S")
             self.status_label.setText(
-                f"آخرین بارگذاری: {Path(self.data_file_path).name} - {time_text}"
+                f"آخرین بارگذاری: {Path(file_path).name} — {timestamp}"
             )
         else:
             self.status_label.setText("آخرین به‌روزرسانی: نامشخص")
