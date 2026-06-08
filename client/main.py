@@ -3,6 +3,7 @@
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -189,11 +190,22 @@ class MainWindow(QMainWindow):
         ]
         self.show_results(results)
 
+    def update_status_label(self) -> None:
+        file_time = getattr(self, "data_file_mtime", None)
+        if file_time:
+            time_text = Path(self.data_file_path).stat().st_mtime
+            self.status_label.setText(
+                f"آخرین بارگذاری: {Path(self.data_file_path).name} - {time_text}"
+            )
+        else:
+            self.status_label.setText("آخرین به‌روزرسانی: نامشخص")
+
     def on_refresh(self) -> None:
         self.ads = self.load_ads()
         self.sort_ads()
         self.on_search()
-        self.details_label.setText("داده‌ها به‌روزرسانی شدند.")
+        self.update_status_label()
+        self.details_label.setText("داده‌ها دوباره بارگذاری و فیلتر شدند.")
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
