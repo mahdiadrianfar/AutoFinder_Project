@@ -80,13 +80,16 @@ class MainWindow(QMainWindow):
         self.resize(900, 700)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("جستجوی عنوان آگهی...")
-        self.search_button = QPushButton("جستجو")
+        self.search_input.setPlaceholderText(" Search box...")
+        self.search_button = QPushButton("Search")
         self.search_button.clicked.connect(self.on_search)
+        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button.clicked.connect(self.on_refresh)
 
         search_layout = QHBoxLayout()
         search_layout.addWidget(self.search_input)
         search_layout.addWidget(self.search_button)
+        search_layout.addWidget(self.refresh_button)
 
         self.result_list = QListWidget()
         self.result_list.itemClicked.connect(self.on_item_selected)
@@ -110,7 +113,8 @@ class MainWindow(QMainWindow):
         self.show_results(self.ads)
 
     def load_ads(self) -> list[dict]:
-        data_file = Path(__file__).resolve().parent.parent / "divar_tehran_car.json"
+        data_file = Path(__file__).resolve().parent.parent / \
+            "divar_tehran_car.json"
         if not data_file.exists():
             self.details_label.setText(
                 f"فایل داده پیدا نشد: {data_file}"
@@ -166,6 +170,12 @@ class MainWindow(QMainWindow):
             if query in str(ad.get("title", "")).lower()
         ]
         self.show_results(results)
+
+    def on_refresh(self) -> None:
+        self.ads = self.load_ads()
+        self.sort_ads()
+        self.on_search()
+        self.details_label.setText("داده‌ها به‌روزرسانی شدند.")
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
