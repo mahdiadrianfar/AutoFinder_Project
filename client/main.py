@@ -150,16 +150,26 @@ class MainWindow(QMainWindow):
 
         for ad in ads:
             title = ad.get("title", "")
-            price = ad.get("normalized_price", "")
-            item = QListWidgetItem(f"{title} — {price}")
+            item = QListWidgetItem(title)
             self.result_list.addItem(item)
 
         self.details_label.setText(
-            "روی یکی از آگهی‌ها کلیک کنید تا قیمت و جزئیات آن نمایش داده شود."
+            "روی یکی از آگهی‌ها کلیک کنید تا جزئیات کامل آن نمایش داده شود."
         )
 
+    def matches_query(self, title: str, query: str) -> bool:
+        title_text = str(title).lower()
+        query_text = str(query).strip().lower()
+        if not query_text:
+            return True
+
+        for token in query_text.split():
+            if token not in title_text:
+                return False
+        return True
+
     def on_search(self) -> None:
-        query = self.search_input.text().strip().lower()
+        query = self.search_input.text().strip()
         if not query:
             self.show_results(self.ads)
             return
@@ -167,7 +177,7 @@ class MainWindow(QMainWindow):
         results = [
             ad
             for ad in self.ads
-            if query in str(ad.get("title", "")).lower()
+            if self.matches_query(ad.get("title", ""), query)
         ]
         self.show_results(results)
 
@@ -200,6 +210,13 @@ class MainWindow(QMainWindow):
             details.append(f"محل: {location}")
         if badge:
             details.append(f"توضیح کوتاه: {badge}")
+
+        for key, value in selected.items():
+            if key in {"title", "normalized_price", "price", "kms", "location", "badge", "price_int"}:
+                continue
+            if not value:
+                continue
+            details.append(f"{key}: {value}")
 
         self.details_label.setText("\n".join(details))
 
