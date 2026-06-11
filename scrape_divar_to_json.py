@@ -92,7 +92,6 @@ def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:
                 "location": location,
                 "badge": badge,
                 "image": image,
-                "raw_html": anchor_html,
             }
         )
 
