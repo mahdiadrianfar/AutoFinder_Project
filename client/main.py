@@ -3,13 +3,10 @@
 import json
 import re
 import sys
-import threading
-import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -85,23 +82,21 @@ class MainWindow(QMainWindow):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(" Search box...")
+        self.search_input.returnPressed.connect(self.on_search)
         self.search_button = QPushButton("Search")
         self.search_button.clicked.connect(self.on_search)
-        self.refresh_button = QPushButton("Refresh")
-        self.refresh_button.clicked.connect(self.on_refresh)
 
         search_layout = QHBoxLayout()
         search_layout.addWidget(self.search_input)
         search_layout.addWidget(self.search_button)
-        search_layout.addWidget(self.refresh_button)
 
         self.result_list = QListWidget()
         self.result_list.itemClicked.connect(self.on_item_selected)
 
-        self.status_label = QLabel("آخرین به‌روزرسانی: بارگذاری اولیه")
+        self.status_label = QLabel("Last update: Initial upload : ")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self.details_label = QLabel("نتایج جستجو در اینجا نمایش داده می‌شود.")
+        self.details_label = QLabel("Search results are displayed here.")
         self.details_label.setWordWrap(True)
         self.details_label.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -120,15 +115,12 @@ class MainWindow(QMainWindow):
         self.show_results(self.ads)
         self.update_status_label()
 
-        # Auto-refresh on startup after 1 second
-        QTimer.singleShot(1000, self.on_refresh)
-
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
             "divar_tehran_car.json"
         if not data_file.exists():
             self.details_label.setText(
-                f"فایل داده پیدا نشد: {data_file}"
+                f"Data file not found:   {data_file}"
             )
             return []
 
@@ -157,7 +149,7 @@ class MainWindow(QMainWindow):
         self.current_results = ads
 
         if not ads:
-            self.details_label.setText("هیچ نتیجه‌ای پیدا نشد.")
+            self.details_label.setText("No results found.")
             return
 
         for ad in ads:
@@ -166,7 +158,7 @@ class MainWindow(QMainWindow):
             self.result_list.addItem(item)
 
         self.details_label.setText(
-            "روی یکی از آگهی‌ها کلیک کنید تا جزئیات کامل آن نمایش داده شود."
+            "Click on one of the ads to display its full details."
         )
 
     def matches_query(self, title: str, query: str) -> bool:
@@ -200,75 +192,10 @@ class MainWindow(QMainWindow):
             timestamp = datetime.fromtimestamp(
                 file_time).strftime("%Y-%m-%d %H:%M:%S")
             self.status_label.setText(
-                f"آخرین بارگذاری: {Path(file_path).name} — {timestamp}"
+                f"Last upload : {Path(file_path).name} — {timestamp}"
             )
         else:
-            self.status_label.setText("آخرین به‌روزرسانی: نامشخص")
-
-    def on_refresh(self) -> None:
-        # Run scraper script in background to avoid blocking UI
-        self.refresh_button.setEnabled(False)
-        self.status_label.setText("⏳ درحال دریافت داده‌ها...")
-        self.details_label.setText("لطفا منتظر بمانید...")
-
-        script_path = Path(__file__).resolve(
-        ).parent.parent / "scrape_divar_to_json.py"
-
-        def worker():
-            self._refresh_error = None
-            try:
-                result = subprocess.run(
-                    [sys.executable, str(script_path)],
-                    capture_output=True,
-                    text=True,
-                    timeout=20
-                )
-                if result.returncode != 0:
-                    self._refresh_error = f"Scraper error: {result.stderr}"
-                # Wait a bit to ensure file is fully written to disk
-                time.sleep(0.3)
-            except subprocess.TimeoutExpired:
-                self._refresh_error = "Scraper timeout (20s)"
-            except Exception as e:
-                self._refresh_error = str(e)
-            finally:
-                # Always schedule UI update on main thread
-                QTimer.singleShot(0, self._on_refresh_done)
-
-        thread = threading.Thread(target=worker, daemon=False)
-        thread.start()
-
-    def _on_refresh_done(self) -> None:
-        try:
-            # Check for errors first
-            if getattr(self, "_refresh_error", None):
-                self.refresh_button.setEnabled(True)
-                self.status_label.setText("❌ خطا در دریافت")
-                self.details_label.setText(
-                    f"خطا: {self._refresh_error}"
-                )
-                del self._refresh_error
-                return
-
-            # Try to load new ads
-            new_ads = self.load_ads()
-            if not new_ads:
-                self.refresh_button.setEnabled(True)
-                self.status_label.setText("⚠️ بدون داده")
-                self.details_label.setText("هیچ آگهی یافت نشد")
-                return
-
-            self.ads = new_ads
-            self.on_search()
-            self.update_status_label()
-
-            msg = f"✓ بروز شد ({len(new_ads)} آگهی)"
-            self.details_label.setText(msg)
-
-        except Exception as e:
-            self.details_label.setText(f"❌ خطا: {str(e)}")
-        finally:
-            self.refresh_button.setEnabled(True)
+            self.status_label.setText("Last update: Unknown  ")
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
