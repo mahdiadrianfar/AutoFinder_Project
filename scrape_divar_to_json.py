@@ -3,6 +3,7 @@ import re
 import ssl
 import urllib.request
 from urllib.parse import urljoin
+import sys
 
 URL = "https://divar.ir/s/tehran/car"
 OUTPUT_FILE = "divar_tehran_car.json"
@@ -19,8 +20,12 @@ def fetch_html(url: str) -> str:
     ctx.verify_mode = ssl.CERT_NONE
 
     request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, context=ctx, timeout=15) as response:
-        return response.read().decode("utf-8", errors="replace")
+    try:
+        with urllib.request.urlopen(request, context=ctx, timeout=15) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        print(f"Error fetching {url}: {e}", file=sys.stderr)
+        return ""
 
 
 def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:

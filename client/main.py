@@ -117,9 +117,11 @@ class MainWindow(QMainWindow):
 
         self.ads = self.load_ads()
         self.current_results: list[dict] = []
-        self.sort_ads()
         self.show_results(self.ads)
         self.update_status_label()
+
+        # Auto-refresh on startup after 500ms
+        QTimer.singleShot(500, self.on_refresh)
 
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
@@ -147,10 +149,8 @@ class MainWindow(QMainWindow):
         return normalized_ads
 
     def sort_ads(self) -> None:
-        self.ads.sort(
-            key=lambda item: item.get("price_int") or 0,
-            reverse=True,
-        )
+        # Keep original order from website, don't sort
+        pass
 
     def show_results(self, ads: list[dict]) -> None:
         self.result_list.clear()
