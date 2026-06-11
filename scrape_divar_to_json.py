@@ -38,7 +38,7 @@ def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:
     for anchor_html in anchor_pattern.findall(html):
         if len(items) >= max_items:
             break
-            
+
         href_match = re.search(r'href="([^"]+)"', anchor_html)
         if not href_match:
             continue
@@ -57,17 +57,20 @@ def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:
             anchor_html,
             re.DOTALL,
         )
-        description_matches = [_cleanup(d) for d in description_matches if _cleanup(d)]
+        description_matches = [_cleanup(d)
+                               for d in description_matches if _cleanup(d)]
 
         kms = description_matches[0] if len(description_matches) > 0 else None
-        price = description_matches[1] if len(description_matches) > 1 else None
+        price = description_matches[1] if len(
+            description_matches) > 1 else None
 
         location_match = re.search(
             r'<span[^>]*class="[^"]*kt-post-card__bottom-description[^"]*"[^>]*>(.*?)</span>',
             anchor_html,
             re.DOTALL,
         )
-        location = _cleanup(location_match.group(1)) if location_match else None
+        location = _cleanup(location_match.group(
+            1)) if location_match else None
 
         badge_match = re.search(
             r'<span[^>]*class="[^"]*kt-post-card__red-text[^"]*"[^>]*>(.*?)</span>',
@@ -108,8 +111,16 @@ def _parse_price(price: str | None) -> int | None:
 
 
 def main() -> None:
+    print("Fetching from Divar...", file=sys.stderr)
     html = fetch_html(URL)
+    if not html:
+        print("Failed to fetch HTML", file=sys.stderr)
+        return
+    
+    print(f"Extracting items from HTML...", file=sys.stderr)
     items = extract_items(html, URL)
+    print(f"Found {len(items)} items", file=sys.stderr)
+    
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
     print(f"Saved {len(items)} items to {OUTPUT_FILE}")
