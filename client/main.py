@@ -208,7 +208,7 @@ class MainWindow(QMainWindow):
     def on_refresh(self) -> None:
         # Run scraper script in background to avoid blocking UI
         self.refresh_button.setEnabled(False)
-        self.status_label.setText("در حال بررسی سایت و دریافت آگهی‌ها...")
+        self.status_label.setText("⏳ درحال دریافت داده‌ها...")
 
         script_path = Path(__file__).resolve(
         ).parent.parent / "scrape_divar_to_json.py"
@@ -217,7 +217,7 @@ class MainWindow(QMainWindow):
             try:
                 subprocess.run([sys.executable, str(script_path)], check=False)
                 # Wait a bit to ensure file is fully written to disk
-                time.sleep(0.5)
+                time.sleep(0.2)
             except Exception as e:
                 # store error for main thread to show
                 self._refresh_error = str(e)
