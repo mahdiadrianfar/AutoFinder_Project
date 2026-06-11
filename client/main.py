@@ -209,22 +209,34 @@ class MainWindow(QMainWindow):
         # Run scraper script in background to avoid blocking UI
         self.refresh_button.setEnabled(False)
         self.status_label.setText("⏳ درحال دریافت داده‌ها...")
+        self.details_label.setText("لطفا منتظر بمانید...")
 
         script_path = Path(__file__).resolve(
         ).parent.parent / "scrape_divar_to_json.py"
 
         def worker():
+            self._refresh_error = None
             try:
-                subprocess.run([sys.executable, str(script_path)], check=False)
+                result = subprocess.run(
+                    [sys.executable, str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=20
+                )
+                if result.returncode != 0:
+                    self._refresh_error = f"Scraper error: {result.stderr}"
                 # Wait a bit to ensure file is fully written to disk
-                time.sleep(0.2)
+                time.sleep(0.3)
+            except subprocess.TimeoutExpired:
+                self._refresh_error = "Scraper timeout (20s)"
             except Exception as e:
-                # store error for main thread to show
                 self._refresh_error = str(e)
-            # schedule UI update on main thread
-            QTimer.singleShot(0, self._on_refresh_done)
+            finally:
+                # Always schedule UI update on main thread
+                QTimer.singleShot(0, self._on_refresh_done)
 
-        threading.Thread(target=worker, daemon=True).start()
+        thread = threading.Thread(target=worker, daemon=False)
+        thread.start()
 
     def _on_refresh_done(self) -> None:
         self.refresh_button.setEnabled(True)
