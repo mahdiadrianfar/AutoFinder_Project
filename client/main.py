@@ -3,10 +3,13 @@
 import json
 import re
 import sys
+import threading
+import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -115,6 +118,8 @@ class MainWindow(QMainWindow):
         self.show_results(self.ads)
         self.update_status_label()
 
+        QTimer.singleShot(500, self.on_refresh)
+
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
             "divar_tehran_car.json"
@@ -196,6 +201,53 @@ class MainWindow(QMainWindow):
             )
         else:
             self.status_label.setText("Last update: Unknown  ")
+
+    def on_refresh(self) -> None:
+        self.status_label.setText("در حال به‌روزرسانی داده‌ها...⏳")
+        self.details_label.setText("لطفاً منتظر بمانید...")
+
+        script_path = Path(__file__).resolve(
+        ).parent.parent / "scrape_divar_to_json.py"
+
+        def worker():
+            self._refresh_error = None
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    timeout=25,
+                )
+                if result.returncode != 0:
+                    self._refresh_error = result.stderr.strip() or "Scraper failed"
+                time.sleep(0.3)
+            except subprocess.TimeoutExpired:
+                self._refresh_error = "Scraper timeout (25s)"
+            except Exception as e:
+                self._refresh_error = str(e)
+            finally:
+                QTimer.singleShot(0, self._on_refresh_done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_refresh_done(self) -> None:
+        if getattr(self, "_refresh_error", None):
+            self.status_label.setText("خطا در دریافت آگهی‌ها")
+            self.details_label.setText(f"{self._refresh_error}")
+            del self._refresh_error
+            return
+
+        new_ads = self.load_ads()
+        if not new_ads:
+            self.status_label.setText("هیچ آگهی‌ای بارگذاری نشد")
+            self.details_label.setText("لطفاً بعداً دوباره تلاش کنید.")
+            return
+
+        self.ads = new_ads
+        self.on_search()
+        self.update_status_label()
+        self.details_label.setText(
+            f"✓ داده‌ها بروز شدند ({len(new_ads)} آگهی)")
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
