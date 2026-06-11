@@ -86,6 +86,10 @@ def parse_price_int(price: str) -> int | None:
         return None
 
 
+def _cleanup(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
