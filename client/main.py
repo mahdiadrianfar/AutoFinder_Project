@@ -120,8 +120,8 @@ class MainWindow(QMainWindow):
         self.show_results(self.ads)
         self.update_status_label()
 
-        # Auto-refresh on startup after 500ms
-        QTimer.singleShot(500, self.on_refresh)
+        # Auto-refresh on startup after 1 second
+        QTimer.singleShot(1000, self.on_refresh)
 
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
@@ -239,24 +239,35 @@ class MainWindow(QMainWindow):
         thread.start()
 
     def _on_refresh_done(self) -> None:
-        self.refresh_button.setEnabled(True)
-        # reload and reapply filtering (without sorting)
         try:
-            self.ads = self.load_ads()
-            new_ads_count = len(self.ads)
+            # Check for errors first
+            if getattr(self, "_refresh_error", None):
+                self.refresh_button.setEnabled(True)
+                self.status_label.setText("❌ خطا در دریافت")
+                self.details_label.setText(
+                    f"خطا: {self._refresh_error}"
+                )
+                del self._refresh_error
+                return
 
+            # Try to load new ads
+            new_ads = self.load_ads()
+            if not new_ads:
+                self.refresh_button.setEnabled(True)
+                self.status_label.setText("⚠️ بدون داده")
+                self.details_label.setText("هیچ آگهی یافت نشد")
+                return
+
+            self.ads = new_ads
             self.on_search()
             self.update_status_label()
 
-            if getattr(self, "_refresh_error", None):
-                self.details_label.setText(
-                    f"خطا در بروزرسانی: {self._refresh_error}")
-                del self._refresh_error
-            else:
-                msg = f"✓ داده‌ها بروز شدند ({new_ads_count} آگهی)"
-                self.details_label.setText(msg)
+            msg = f"✓ بروز شد ({len(new_ads)} آگهی)"
+            self.details_label.setText(msg)
+
         except Exception as e:
             self.details_label.setText(f"❌ خطا: {str(e)}")
+        finally:
             self.refresh_button.setEnabled(True)
 
     def on_item_selected(self, item: QListWidgetItem) -> None:

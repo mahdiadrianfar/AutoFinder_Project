@@ -29,71 +29,84 @@ def fetch_html(url: str) -> str:
 
 
 def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:
-    anchor_pattern = re.compile(
-        r"<a[^>]*class=\"[^\"]*kt-post-card__action[^\"]*\"[^>]*>.*?</a>",
-        re.DOTALL,
-    )
     items = []
 
-    for anchor_html in anchor_pattern.findall(html):
+    # Find all post cards - more flexible regex
+    anchor_pattern = re.compile(
+        r'<a[^>]*href="([^"]+)"[^>]*class="[^"]*kt-post-card__action[^"]*"[^>]*>.*?</a>',
+        re.DOTALL,
+    )
+
+    for match in anchor_pattern.finditer(html):
         if len(items) >= max_items:
             break
 
-        href_match = re.search(r'href="([^"]+)"', anchor_html)
-        if not href_match:
+        try:
+            href = match.group(1)
+            url = urljoin(base_url, href)
+            anchor_html = match.group(0)
+
+            # Extract title
+            title_match = re.search(
+                r'<h2[^>]*class="[^"]*kt-post-card__title[^"]*"[^>]*>(.*?)</h2>',
+                anchor_html,
+                re.DOTALL,
+            )
+            title = _cleanup(title_match.group(1)) if title_match else None
+
+            if not title:
+                continue
+
+            # Extract descriptions
+            description_matches = re.findall(
+                r'<div[^>]*class="[^"]*kt-post-card__description[^"]*"[^>]*>(.*?)</div>',
+                anchor_html,
+                re.DOTALL,
+            )
+            description_matches = [
+                _cleanup(d) for d in description_matches if _cleanup(d)]
+
+            kms = description_matches[0] if len(
+                description_matches) > 0 else None
+            price = description_matches[1] if len(
+                description_matches) > 1 else None
+
+            # Extract location
+            location_match = re.search(
+                r'<span[^>]*class="[^"]*kt-post-card__bottom-description[^"]*"[^>]*>(.*?)</span>',
+                anchor_html,
+                re.DOTALL,
+            )
+            location = _cleanup(location_match.group(
+                1)) if location_match else None
+
+            # Extract badge
+            badge_match = re.search(
+                r'<span[^>]*class="[^"]*kt-post-card__red-text[^"]*"[^>]*>(.*?)</span>',
+                anchor_html,
+                re.DOTALL,
+            )
+            badge = _cleanup(badge_match.group(1)) if badge_match else None
+
+            # Extract image
+            img_match = re.search(r'<img[^>]*src="([^"]+)"', anchor_html)
+            image = img_match.group(1) if img_match else None
+
+            items.append(
+                {
+                    "url": url,
+                    "title": title,
+                    "kms": kms,
+                    "price": price,
+                    "price_value": _parse_price(price),
+                    "location": location,
+                    "badge": badge,
+                    "image": image,
+                }
+            )
+        except Exception as e:
+            print(f"Error parsing item: {e}", file=sys.stderr)
             continue
-        href = href_match.group(1)
-        url = urljoin(base_url, href)
-
-        title_match = re.search(
-            r'<h2[^>]*class="[^"]*kt-post-card__title[^"]*"[^>]*>(.*?)</h2>',
-            anchor_html,
-            re.DOTALL,
-        )
-        title = _cleanup(title_match.group(1)) if title_match else None
-
-        description_matches = re.findall(
-            r'<div[^>]*class="[^"]*kt-post-card__description[^"]*"[^>]*>(.*?)</div>',
-            anchor_html,
-            re.DOTALL,
-        )
-        description_matches = [_cleanup(d)
-                               for d in description_matches if _cleanup(d)]
-
-        kms = description_matches[0] if len(description_matches) > 0 else None
-        price = description_matches[1] if len(
-            description_matches) > 1 else None
-
-        location_match = re.search(
-            r'<span[^>]*class="[^"]*kt-post-card__bottom-description[^"]*"[^>]*>(.*?)</span>',
-            anchor_html,
-            re.DOTALL,
-        )
-        location = _cleanup(location_match.group(
-            1)) if location_match else None
-
-        badge_match = re.search(
-            r'<span[^>]*class="[^"]*kt-post-card__red-text[^"]*"[^>]*>(.*?)</span>',
-            anchor_html,
-            re.DOTALL,
-        )
-        badge = _cleanup(badge_match.group(1)) if badge_match else None
-
-        img_match = re.search(r'<img[^>]*src="([^"]+)"', anchor_html)
-        image = img_match.group(1) if img_match else None
-
-        items.append(
-            {
-                "url": url,
-                "title": title,
-                "kms": kms,
-                "price": price,
-                "price_value": _parse_price(price),
-                "location": location,
-                "badge": badge,
-                "image": image,
-            }
-        )
 
     return items
 
