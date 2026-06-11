@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AutoIndex
+client/__pycache__/
+server/**/__pycache__/
+*.sqlite3
