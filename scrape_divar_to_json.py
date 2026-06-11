@@ -19,11 +19,11 @@ def fetch_html(url: str) -> str:
     ctx.verify_mode = ssl.CERT_NONE
 
     request = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(request, context=ctx, timeout=30) as response:
+    with urllib.request.urlopen(request, context=ctx, timeout=15) as response:
         return response.read().decode("utf-8", errors="replace")
 
 
-def extract_items(html: str, base_url: str) -> list[dict]:
+def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:
     anchor_pattern = re.compile(
         r"<a[^>]*class=\"[^\"]*kt-post-card__action[^\"]*\"[^>]*>.*?</a>",
         re.DOTALL,
@@ -31,6 +31,9 @@ def extract_items(html: str, base_url: str) -> list[dict]:
     items = []
 
     for anchor_html in anchor_pattern.findall(html):
+        if len(items) >= max_items:
+            break
+            
         href_match = re.search(r'href="([^"]+)"', anchor_html)
         if not href_match:
             continue

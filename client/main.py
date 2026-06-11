@@ -5,6 +5,7 @@ import re
 import sys
 import threading
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -215,6 +216,8 @@ class MainWindow(QMainWindow):
         def worker():
             try:
                 subprocess.run([sys.executable, str(script_path)], check=False)
+                # Wait a bit to ensure file is fully written to disk
+                time.sleep(0.5)
             except Exception as e:
                 # store error for main thread to show
                 self._refresh_error = str(e)
@@ -226,16 +229,25 @@ class MainWindow(QMainWindow):
     def _on_refresh_done(self) -> None:
         self.refresh_button.setEnabled(True)
         # reload and reapply sorting / filtering
-        self.ads = self.load_ads()
-        self.sort_ads()
-        self.on_search()
-        self.update_status_label()
-        if getattr(self, "_refresh_error", None):
-            self.details_label.setText(
-                f"خطا در بروزرسانی: {self._refresh_error}")
-            del self._refresh_error
-        else:
-            self.details_label.setText("داده‌ها با موفقیت به‌روزرسانی شدند.")
+        try:
+            old_ads_count = len(self.ads)
+            self.ads = self.load_ads()
+            new_ads_count = len(self.ads)
+
+            self.sort_ads()
+            self.on_search()
+            self.update_status_label()
+
+            if getattr(self, "_refresh_error", None):
+                self.details_label.setText(
+                    f"خطا در بروزرسانی: {self._refresh_error}")
+                del self._refresh_error
+            else:
+                msg = f"داده‌ها با موفقیت به‌روزرسانی شدند. ({new_ads_count} آگهی یافت شد)"
+                self.details_label.setText(msg)
+        except Exception as e:
+            self.details_label.setText(f"خطا در بارگذاری داده‌ها: {str(e)}")
+            self.refresh_button.setEnabled(True)
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
