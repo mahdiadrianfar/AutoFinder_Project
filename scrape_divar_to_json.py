@@ -31,20 +31,22 @@ def fetch_html(url: str) -> str:
 def extract_items(html: str, base_url: str, max_items: int = 50) -> list[dict]:
     items = []
 
-    # Find all post cards - more flexible regex
+    # Find all post cards - original working pattern
     anchor_pattern = re.compile(
-        r'<a[^>]*href="([^"]+)"[^>]*class="[^"]*kt-post-card__action[^"]*"[^>]*>.*?</a>',
+        r"<a[^>]*class=\"[^\"]*kt-post-card__action[^\"]*\"[^>]*>.*?</a>",
         re.DOTALL,
     )
 
-    for match in anchor_pattern.finditer(html):
+    for anchor_html in anchor_pattern.findall(html):
         if len(items) >= max_items:
             break
 
         try:
-            href = match.group(1)
+            href_match = re.search(r'href="([^"]+)"', anchor_html)
+            if not href_match:
+                continue
+            href = href_match.group(1)
             url = urljoin(base_url, href)
-            anchor_html = match.group(0)
 
             # Extract title
             title_match = re.search(
