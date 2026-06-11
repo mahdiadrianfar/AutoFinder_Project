@@ -4,10 +4,11 @@ import json
 import re
 import sys
 import threading
-import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urljoin
+
+import requests
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
@@ -22,6 +23,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+}
+
+URL = "https://divar.ir/s/tehran/car"
 
 
 def persian_to_english_digits(value: str) -> str:
@@ -118,7 +127,7 @@ class MainWindow(QMainWindow):
         self.show_results(self.ads)
         self.update_status_label()
 
-        QTimer.singleShot(500, self.on_refresh)
+        QTimer.singleShot(500, self.refresh_on_startup)
 
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
@@ -148,6 +157,96 @@ class MainWindow(QMainWindow):
     def sort_ads(self) -> None:
         # Keep original order from website, don't sort
         pass
+
+    def fetch_html(self, url: str) -> str:
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=20)
+            response.raise_for_status()
+            return response.text
+        except Exception as e:
+            self._refresh_error = str(e)
+            return ""
+
+    def extract_items(self, html: str, base_url: str, max_items: int = 50) -> list[dict]:
+        items = []
+        anchor_pattern = re.compile(
+            r"<a[^>]*class=\"[^\"]*kt-post-card__action[^\"]*\"[^>]*>.*?</a>",
+            re.DOTALL,
+        )
+
+        for anchor_html in anchor_pattern.findall(html):
+            if len(items) >= max_items:
+                break
+
+            href_match = re.search(r'href="([^"]+)"', anchor_html)
+            if not href_match:
+                continue
+            href = href_match.group(1)
+            url = urljoin(base_url, href)
+
+            title_match = re.search(
+                r'<h2[^>]*class="[^"]*kt-post-card__title[^"]*"[^>]*>(.*?)</h2>',
+                anchor_html,
+                re.DOTALL,
+            )
+            title = _cleanup(title_match.group(1)) if title_match else None
+            if not title:
+                continue
+
+            description_matches = re.findall(
+                r'<div[^>]*class="[^"]*kt-post-card__description[^"]*"[^>]*>(.*?)</div>',
+                anchor_html,
+                re.DOTALL,
+            )
+            description_matches = [
+                _cleanup(d) for d in description_matches if _cleanup(d)]
+            kms = description_matches[0] if len(
+                description_matches) > 0 else None
+            price = description_matches[1] if len(
+                description_matches) > 1 else None
+
+            location_match = re.search(
+                r'<span[^>]*class="[^"]*kt-post-card__bottom-description[^"]*"[^>]*>(.*?)</span>',
+                anchor_html,
+                re.DOTALL,
+            )
+            location = _cleanup(location_match.group(
+                1)) if location_match else None
+
+            badge_match = re.search(
+                r'<span[^>]*class="[^"]*kt-post-card__red-text[^"]*"[^>]*>(.*?)</span>',
+                anchor_html,
+                re.DOTALL,
+            )
+            badge = _cleanup(badge_match.group(1)) if badge_match else None
+
+            img_match = re.search(r'<img[^>]*src="([^"]+)"', anchor_html)
+            image = img_match.group(1) if img_match else None
+
+            items.append(
+                {
+                    "url": url,
+                    "title": title,
+                    "kms": kms,
+                    "price": price,
+                    "price_value": parse_price_int(price),
+                    "location": location,
+                    "badge": badge,
+                    "image": image,
+                }
+            )
+
+        return items
+
+    def fetch_latest_ads(self) -> list[dict]:
+        html = self.fetch_html(URL)
+        if not html:
+            return []
+
+        items = self.extract_items(html, URL)
+        if not items and not getattr(self, "_refresh_error", None):
+            self._refresh_error = "No ads found on the page"
+        return items
 
     def show_results(self, ads: list[dict]) -> None:
         self.result_list.clear()
@@ -202,53 +301,36 @@ class MainWindow(QMainWindow):
         else:
             self.status_label.setText("Last update: Unknown  ")
 
-    def on_refresh(self) -> None:
-        self.status_label.setText("در حال به‌روزرسانی داده‌ها...⏳")
+    def refresh_on_startup(self) -> None:
+        self.status_label.setText("در حال به‌روزرسانی اولیه...⏳")
         self.details_label.setText("لطفاً منتظر بمانید...")
-
-        script_path = Path(__file__).resolve(
-        ).parent.parent / "scrape_divar_to_json.py"
 
         def worker():
             self._refresh_error = None
-            try:
-                result = subprocess.run(
-                    [sys.executable, str(script_path)],
-                    capture_output=True,
-                    text=True,
-                    timeout=25,
-                    cwd=str(script_path.parent),
-                )
-                if result.returncode != 0:
-                    self._refresh_error = result.stderr.strip() or "Scraper failed"
-                time.sleep(0.3)
-            except subprocess.TimeoutExpired:
-                self._refresh_error = "Scraper timeout (25s)"
-            except Exception as e:
-                self._refresh_error = str(e)
-            finally:
-                QTimer.singleShot(0, self._on_refresh_done)
+            latest_ads = self.fetch_latest_ads()
+            if getattr(self, "_refresh_error", None):
+                QTimer.singleShot(0, self._show_refresh_error)
+                return
+
+            if latest_ads:
+                self.ads = latest_ads
+                QTimer.singleShot(0, self._show_latest_ads)
+            else:
+                QTimer.singleShot(0, self._show_refresh_error)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_refresh_done(self) -> None:
-        if getattr(self, "_refresh_error", None):
-            self.status_label.setText("خطا در دریافت آگهی‌ها")
-            self.details_label.setText(f"{self._refresh_error}")
-            del self._refresh_error
-            return
-
-        new_ads = self.load_ads()
-        if not new_ads:
-            self.status_label.setText("هیچ آگهی‌ای بارگذاری نشد")
-            self.details_label.setText("لطفاً بعداً دوباره تلاش کنید.")
-            return
-
-        self.ads = new_ads
+    def _show_latest_ads(self) -> None:
         self.on_search()
         self.update_status_label()
         self.details_label.setText(
-            f"✓ داده‌ها بروز شدند ({len(new_ads)} آگهی)")
+            f"✓ داده‌ها بروز شدند ({len(self.ads)} آگهی)")
+
+    def _show_refresh_error(self) -> None:
+        self.status_label.setText("خطا در دریافت آگهی‌ها")
+        self.details_label.setText(
+            getattr(self, "_refresh_error", "خطای نامشخص")
+        )
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
         index = self.result_list.row(item)
