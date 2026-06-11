@@ -86,6 +86,17 @@ def parse_price_int(price: str) -> int | None:
         return None
 
 
+def normalize_ads(ads: list[dict]) -> list[dict]:
+    normalized_ads = []
+    for ad in ads:
+        price = ad.get("price", "")
+        normalized_price = normalize_price(price)
+        ad["normalized_price"] = normalized_price
+        ad["price_int"] = parse_price_int(normalized_price)
+        normalized_ads.append(ad)
+    return normalized_ads
+
+
 def _cleanup(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
@@ -112,7 +123,7 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel("Last update: Initial upload : ")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
 
-        self.details_label = QLabel("Search results are displayed here.")
+        self.details_label = QLabel("Receiving the latest ads...")
         self.details_label.setWordWrap(True)
         self.details_label.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -126,12 +137,12 @@ class MainWindow(QMainWindow):
         container.setLayout(main_layout)
         self.setCentralWidget(container)
 
-        self.ads = self.load_ads()
+        self.ads: list[dict] = []
         self.current_results: list[dict] = []
         self.show_results(self.ads)
-        self.update_status_label()
+        self.status_label.setText("Initial update...")
 
-        QTimer.singleShot(500, self.refresh_on_startup)
+        QTimer.singleShot(100, self.refresh_on_startup)
 
     def load_ads(self) -> list[dict]:
         data_file = Path(__file__).resolve().parent.parent / \
@@ -250,7 +261,8 @@ class MainWindow(QMainWindow):
         items = self.extract_items(html, URL)
         if not items and not getattr(self, "_refresh_error", None):
             self._refresh_error = "No ads found on the page"
-        return items
+
+        return normalize_ads(items) if items else []
 
     def show_results(self, ads: list[dict]) -> None:
         self.result_list.clear()
@@ -294,25 +306,22 @@ class MainWindow(QMainWindow):
         self.show_results(results)
 
     def update_status_label(self) -> None:
-        file_time = getattr(self, "data_file_mtime", None)
-        file_path = getattr(self, "data_file_path", None)
-        if file_time and file_path:
-            timestamp = datetime.fromtimestamp(
-                file_time).strftime("%Y-%m-%d %H:%M:%S")
-            self.status_label.setText(
-                f"Last upload : {Path(file_path).name} — {timestamp}"
-            )
-        else:
-            self.status_label.setText("Last update: Unknown  ")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.status_label.setText(f"Latest update: {timestamp}")
 
     def refresh_on_startup(self) -> None:
-        self.status_label.setText("در حال به‌روزرسانی اولیه...⏳")
-        self.details_label.setText("لطفاً منتظر بمانید...")
+        self.status_label.setText("Ready for initial update...⏳")
+        self.details_label.setText("Please click the search button...")
 
         def worker():
             self._refresh_error = None
             latest_ads = self.fetch_latest_ads()
             if getattr(self, "_refresh_error", None):
+                fallback_ads = self.load_ads()
+                if fallback_ads:
+                    self.ads = fallback_ads
+                    QTimer.singleShot(0, self._show_latest_ads)
+                    return
                 QTimer.singleShot(0, self._show_refresh_error)
                 return
 
@@ -320,7 +329,13 @@ class MainWindow(QMainWindow):
                 self.ads = latest_ads
                 QTimer.singleShot(0, self._show_latest_ads)
             else:
-                QTimer.singleShot(0, self._show_refresh_error)
+                fallback_ads = self.load_ads()
+                if fallback_ads:
+                    self.ads = fallback_ads
+                    self._refresh_error = "اطلاعات جدید دریافت نشد؛ داده‌های ذخیره‌شده نمایش داده شدند."
+                    QTimer.singleShot(0, self._show_latest_ads)
+                else:
+                    QTimer.singleShot(0, self._show_refresh_error)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -328,12 +343,12 @@ class MainWindow(QMainWindow):
         self.on_search()
         self.update_status_label()
         self.details_label.setText(
-            f"✓ داده‌ها بروز شدند ({len(self.ads)} آگهی)")
+            f"✓ Data updated ({len(self.ads)} ads)")
 
     def _show_refresh_error(self) -> None:
-        self.status_label.setText("خطا در دریافت آگهی‌ها")
+        self.status_label.setText("Error retrieving ads")
         self.details_label.setText(
-            getattr(self, "_refresh_error", "خطای نامشخص")
+            getattr(self, "_refresh_error", "Unknown error")
         )
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
