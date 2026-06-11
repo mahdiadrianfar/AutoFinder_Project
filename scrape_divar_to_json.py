@@ -116,11 +116,11 @@ def main() -> None:
     if not html:
         print("Failed to fetch HTML", file=sys.stderr)
         return
-    
+
     print(f"Extracting items from HTML...", file=sys.stderr)
     items = extract_items(html, URL)
     print(f"Found {len(items)} items", file=sys.stderr)
-    
+
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
     print(f"Saved {len(items)} items to {OUTPUT_FILE}")

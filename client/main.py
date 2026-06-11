@@ -228,13 +228,11 @@ class MainWindow(QMainWindow):
 
     def _on_refresh_done(self) -> None:
         self.refresh_button.setEnabled(True)
-        # reload and reapply sorting / filtering
+        # reload and reapply filtering (without sorting)
         try:
-            old_ads_count = len(self.ads)
             self.ads = self.load_ads()
             new_ads_count = len(self.ads)
 
-            self.sort_ads()
             self.on_search()
             self.update_status_label()
 
@@ -243,10 +241,10 @@ class MainWindow(QMainWindow):
                     f"خطا در بروزرسانی: {self._refresh_error}")
                 del self._refresh_error
             else:
-                msg = f"داده‌ها با موفقیت به‌روزرسانی شدند. ({new_ads_count} آگهی یافت شد)"
+                msg = f"✓ داده‌ها بروز شدند ({new_ads_count} آگهی)"
                 self.details_label.setText(msg)
         except Exception as e:
-            self.details_label.setText(f"خطا در بارگذاری داده‌ها: {str(e)}")
+            self.details_label.setText(f"❌ خطا: {str(e)}")
             self.refresh_button.setEnabled(True)
 
     def on_item_selected(self, item: QListWidgetItem) -> None:
