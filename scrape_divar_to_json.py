@@ -1,12 +1,15 @@
 import json
 import re
 import ssl
-import urllib.request
-from urllib.parse import urljoin
 import sys
+from pathlib import Path
+from urllib.parse import urljoin
 
+import requests
+
+ROOT_DIR = Path(__file__).resolve().parent
 URL = "https://divar.ir/s/tehran/car"
-OUTPUT_FILE = "divar_tehran_car.json"
+OUTPUT_FILE = ROOT_DIR / "divar_tehran_car.json"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -15,14 +18,14 @@ HEADERS = {
 
 
 def fetch_html(url: str) -> str:
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-
-    request = urllib.request.Request(url, headers=HEADERS)
     try:
-        with urllib.request.urlopen(request, context=ctx, timeout=15) as response:
-            return response.read().decode("utf-8", errors="replace")
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        return response.text
     except Exception as e:
         print(f"Error fetching {url}: {e}", file=sys.stderr)
         return ""

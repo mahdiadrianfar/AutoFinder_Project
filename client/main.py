@@ -217,6 +217,7 @@ class MainWindow(QMainWindow):
                     capture_output=True,
                     text=True,
                     timeout=25,
+                    cwd=str(script_path.parent),
                 )
                 if result.returncode != 0:
                     self._refresh_error = result.stderr.strip() or "Scraper failed"
